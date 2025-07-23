@@ -34,9 +34,8 @@ def get_calendar_service():
     if os.path.exists("token.json"):
         with open("token.json", "r") as token:
             creds_data = json.load(token)
-            creds = google.oauth2.credentials.Credentials.from_authorized_user_info(
-                creds_data, SCOPES
-            )
+            creds = google.oauth2.credentials.Credentials.from_authorized_user_info(creds_data, SCOPES)
+            
     else:
         creds = None
 
@@ -148,7 +147,7 @@ async def create_event():
 
 @app.route("/delete_event", methods=["DELETE"])
 async def delete_event():
-    "try:
+    try:
         service = get_calendar_service()
     except MissingAuthUrl as e:
         # Return the URL so the GPT can give it to the user
