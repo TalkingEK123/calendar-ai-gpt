@@ -1,7 +1,6 @@
-quart==0.18.4          # last release that doesn't depend on Flask
-Werkzeug<3
-gunicorn               # production server
-hypercorn              # optional but Quart works with it
+quart>=0.19.5
+gunicorn
+hypercorn
 google-api-python-client
 google-auth
 google-auth-oauthlib
