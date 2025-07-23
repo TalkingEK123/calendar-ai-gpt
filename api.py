@@ -1,4 +1,5 @@
 # Import necessary libraries
+import os
 from quart import Quart, request, jsonify, abort
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -7,7 +8,9 @@ from googleapiclient.discovery import build
 from notion_client import Client
 import datetime
 from dotenv import load_dotenv
-import os
+from google_auth_oauthlib.flow import Flow
+
+
 
 # Load environment variables from a .env file for better security and configuration management
 load_dotenv()
@@ -35,9 +38,6 @@ def get_calendar_service():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            from google_auth_oauthlib.flow import Flow
-            import os
-            
             CLIENT_CONFIG = {
                 "web": {
                     "client_id":     os.environ["GOOGLE_CLIENT_ID"],
