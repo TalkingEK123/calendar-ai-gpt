@@ -1,4 +1,5 @@
 quart==0.18.4          # last release that doesn't depend on Flask
+Werkzeug<3
 gunicorn               # production server
 hypercorn              # optional but Quart works with it
 google-api-python-client
