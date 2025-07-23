@@ -3,7 +3,7 @@ google_auth_oauthlib==1.2.0
 notion_client==2.2.1
 protobuf==4.25.2
 python-dotenv==1.0.1
-quart==0.19.4
+quart==0.18.4
 Flask<3                # pin Flask below version 3
 gunicorn               # production server
 google-api-python-client
