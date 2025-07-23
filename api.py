@@ -35,7 +35,25 @@ def get_calendar_service():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file("credentials.json", SCOPES)
+            from google_auth_oauthlib.flow import Flow
+            import os
+            
+            CLIENT_CONFIG = {
+                "web": {
+                    "client_id":     os.environ["GOOGLE_CLIENT_ID"],
+                    "client_secret": os.environ["GOOGLE_CLIENT_SECRET"],
+                    "auth_uri":      "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri":     "https://oauth2.googleapis.com/token",
+                    "redirect_uris": [os.environ["REDIRECT_URI"]],
+                }
+            }
+            
+            flow = Flow.from_client_config(
+                CLIENT_CONFIG,
+                scopes=SCOPES,
+                redirect_uri=os.environ["REDIRECT_URI"],
+            )
+
             creds = flow.run_local_server(port=0)
             with open("token.json", "w") as token:
                 token.write(creds.to_json())
