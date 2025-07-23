@@ -1,16 +1,17 @@
 # Import necessary libraries
-import os
+import os, json, datetime
 from quart import Quart, request, jsonify, abort
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from notion_client import Client
-import datetime
 from dotenv import load_dotenv
 from google_auth_oauthlib.flow import InstalledAppFlow
 
-
+FLOW_CACHE = {}                 # keeps the Flow between steps
+SCOPES = ["https://www.googleapis.com/auth/calendar"]
+REDIRECT_URI = os.environ["REDIRECT_URI"] 
 
 # Load environment variables from a .env file for better security and configuration management
 load_dotenv()
@@ -24,48 +25,63 @@ notion = Client(auth=os.getenv("NOTION_TOKEN"))
 # Define the Google API scope needed for calendar access
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
+class MissingAuthUrl(Exception):
+    def __init__(self, url): self.url = url
+
 
 def get_calendar_service():
-    """Retrieve Google Calendar service object to interact with the API."""
-    creds = None
-    # Check if access token exists in 'token.json' for reuse
+    # ---------------- token cache -----------------
     if os.path.exists("token.json"):
         with open("token.json", "r") as token:
-            creds = Credentials.from_authorized_user_file("token.json", SCOPES)
+            creds_data = json.load(token)
+            creds = google.oauth2.credentials.Credentials.from_authorized_user_info(
+                creds_data, SCOPES
+            )
+    else:
+        creds = None
 
-    # Refresh or obtain new credentials if necessary
+    # -------------- need authorization ------------
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
+            from google_auth_oauthlib.flow import Flow
+
             CLIENT_CONFIG = {
                 "web": {
                     "client_id":     os.environ["GOOGLE_CLIENT_ID"],
                     "client_secret": os.environ["GOOGLE_CLIENT_SECRET"],
                     "auth_uri":      "https://accounts.google.com/o/oauth2/auth",
                     "token_uri":     "https://oauth2.googleapis.com/token",
-                    "redirect_uris": [os.environ["REDIRECT_URI"]],
+                    "redirect_uris": [REDIRECT_URI],
                 }
             }
-            
-            flow = InstalledAppFlow.from_client_config(
+
+            flow = Flow.from_client_config(
                 CLIENT_CONFIG,
                 scopes=SCOPES,
-                redirect_uri=os.environ["REDIRECT_URI"],
+                redirect_uri=REDIRECT_URI,
             )
 
-            creds = flow.run_local_server(port=0)
-            with open("token.json", "w") as token:
-                token.write(creds.to_json())
+            # Save the flow in memory so /oauth2callback can finish it
+            FLOW_CACHE["flow"] = flow
 
+            auth_url, _ = flow.authorization_url(access_type="offline", prompt="consent")
+            # Instead of crashing, raise a custom exception with the URL
+            raise MissingAuthUrl(auth_url)
+
+    # -------------- build service -----------------
     service = build("calendar", "v3", credentials=creds)
     return service
 
 
 @app.route("/read_events", methods=["GET"])
 async def read_events():
-    """API endpoint to read events from a specified Google Calendar."""
-    service = get_calendar_service()
+    try:
+        service = get_calendar_service()
+    except MissingAuthUrl as e:
+        # Return the URL so the GPT can give it to the user
+        return jsonify({"auth_url": e.url}), 401
 
     # Retrieve query parameters with defaults
     calendar_id = request.args.get("calendar_id", "primary")
@@ -95,10 +111,11 @@ async def read_events():
 
 @app.route("/create_event", methods=["POST"])
 async def create_event():
-    """API endpoint to create a new event in a specified Google Calendar."""
-    service = get_calendar_service()
-    data = await request.get_json()
-
+    try:
+        service = get_calendar_service()
+    except MissingAuthUrl as e:
+        # Return the URL so the GPT can give it to the user
+        return jsonify({"auth_url": e.url}), 401
     # Retrieve event details from request body
     calendar_id = data.get("calendar_id", "primary")
     summary = data.get("summary")
@@ -131,8 +148,11 @@ async def create_event():
 
 @app.route("/delete_event", methods=["DELETE"])
 async def delete_event():
-    """API endpoint to delete an event from a specified Google Calendar."""
-    service = get_calendar_service()
+    "try:
+        service = get_calendar_service()
+    except MissingAuthUrl as e:
+        # Return the URL so the GPT can give it to the user
+        return jsonify({"auth_url": e.url}), 401
 
     calendar_id = request.args.get("calendar_id", "primary")
     event_id = request.args.get("event_id")
@@ -147,6 +167,23 @@ async def delete_event():
     except Exception as e:
         abort(500, description=str(e))
 
+
+
+@app.route("/oauth2callback")
+async def oauth2callback():
+    flow = FLOW_CACHE.pop("flow", None)
+    if flow is None:
+        return "Session expired; please start again.", 400
+
+    flow.fetch_token(authorization_response=request.url)
+    creds = flow.credentials
+
+    # Persist token.json so future calls skip the flow
+    with open("token.json", "w") as tokenfile:
+        tokenfile.write(creds.to_json())
+
+    return "Authorization complete. You can close this tab."
+    
 
 @app.route("/list_notion_databases", methods=["GET"])
 async def list_notion_databases():
