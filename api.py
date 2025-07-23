@@ -8,7 +8,7 @@ from googleapiclient.discovery import build
 from notion_client import Client
 import datetime
 from dotenv import load_dotenv
-from google_auth_oauthlib.flow import Flow
+from google_auth_oauthlib.flow import InstalledAppFlow
 
 
 
@@ -48,7 +48,7 @@ def get_calendar_service():
                 }
             }
             
-            flow = Flow.from_client_config(
+            flow = InstalledAppFlow.from_client_config(
                 CLIENT_CONFIG,
                 scopes=SCOPES,
                 redirect_uri=os.environ["REDIRECT_URI"],
